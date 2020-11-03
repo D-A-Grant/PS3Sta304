@@ -1,0 +1,181 @@
+---
+title: "Rough PS3"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+
+
+#ROUGH WORK
+
+install(lme4)
+
+View(reduced_data)
+
+reduced_data$farm <- as.character(reduced_data$farm)
+
+reduced_data$farm[reduced_data$farm == "non-farm"] <-0
+
+reduced_data$farm[reduced_data$farm == "farm"] <-1
+
+reduced_data$labforce <- as.character(reduced_data$labforce)
+
+reduced_data$labforce[reduced_data$labforce == "yes, in the labor force"] <-0
+
+reduced_data$labforce[reduced_data$labforce == "0"] <-1
+
+CD<-reduced_data #Cleaned Data
+
+CD$labforce <- as.factor(CD$labforce)
+
+CD$farm <- as.factor(CD$farm)
+
+# Loading in the cleaned survey Data
+survey_data <- read_csv("C:/Users/Daniel/Desktop/PS3/survey_data.csv")
+
+# Loading in the cleaned census Data
+census_data <- read_csv("C:/Users/Daniel/Desktop/PS3/census_data.csv")
+
+census2<- read_csv("census_data_2.csv")
+ 
+census2$farm[census2$farm == "non-farm"] <-0
+
+census2$farm[census2$farm == "farm"] <-1
+
+census2$sex[census2$sex == "female"] <-0
+
+census2$sex[census2$sex == "male"] <-1
+
+simpleM<- lm(vote_trump ~ age + gender, data = survey_data)
+
+census2$estimate<- simpleM %>% 
++ predict(newdata = census2)
+
+survey_data$gender[survey_data$gender == "Female"] <-0
+survey_data$gender[survey_data$gender == "Male"] <-1
+names(census2)[names(census2)=="sex"] <- "gender"
+simpleM<- lm(vote_trump ~ age + gender, data = survey_data)
+census2$estimate<- simpleM %>% 
++ predict(newdata = census2)
+work<-census2
+View(work)
+
+work %>% 
+mutate(DT_predict = estimate*n) %>% 
+summarise(DT_predict2 = sum(DT_predict)/sum(n))
+
+work %>% + mutate(DT_predict = estimate*n) %>% + group_by(farm) +
+summarise(DT_predict2 = sum(DT_predict)/sum(n))
+
+names(work)[names(work)=="predict"] <- "YHat"
+
+C3$farm_est <- C3 %>%
+mutate(DT_predict_prop = estimate*n) %>% 
+group_by(farm) %>% 
+summarise(DT_predict = sum(DT_predict_prop)/sum(n))
+
+S2<-survey_data
+
+S2$vote_2016[S2$vote_2016 == "Donald Trump"] <-1
+S2$vote_2016[S2$vote_2016 != "1"] <-0
+
+names(S2)[names(S2)=="vote_2016"] <- "Voted_Trump_2016"
+
+Model<- lm(vote_trump ~ age + gender + as.factor(Voted_Trump_2016), data = S2)
+
+farm_est <- C3 %>%
+mutate(DT_predict_prop = estimate*n) %>% 
+group_by(farm) %>% 
+summarise(DT_predict = sum(DT_predict_prop)/sum(n))
+
+View(farm_est)
+
+Cen_Dat <- census2
+
+Sur_Dat <- S2 
+
+Sur_Dat <- filter(Sur_Dat, !is.na(vote_trump))
+
+brms_model <- brm(vote_trump ~ age + gender, data = Sur_Dat, family = bernoulli())
+
+model_region <- brm(vote_trump ~ age + gender + (1|state), data = Sur_Dat, family = bernoulli(), file = "model_region", control = list(adapt_delta = 0.90))
+
+> post_strat<-
++ brms_model %>% 
++ tidybayes::add_predicted_draws(newdata = Cen_Dat) %>% 
++ rename(DT_predict = .prediction) %>% 
++ mutate(DT_predict_prop = DT_predict*n) %>% 
++ group_by(region, .draw) %>% 
++ summarise(DT_predict = sum(DT_predict_prop)/sum(n)) %>%
++ group_by(region) %>% 
++ summarise(mean = mean(DT_predict), lower=quantile(DT_predict, 0.025), upper = quantile(DT_predict, 0.975))
+
+model_region <- brm(vote_trump ~ age + gender + (1|state), data = Sur_Dat, family = bernoulli(), file = "model_region", control = list(adapt_delta = 0.90))
+
+TS<- Sur_Dat
+
+TS$region <- TS$state
+
+Sur_Dat$region[TS$region == "WA"] <- "pacific division"
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+TS$region <- factor(TS$region, levels = c("east north central div", "east south central div", "middle atlantic division", "mountain division", "new england division", "pacific division", "south atlantic division", "west north central div", "west south central div"))
+
+>region_model <- brm(vote_trump ~ age + gender + (1|region), data=TS, family=bernoulli())
+
+> Cen_Dat$estimate2 <-
++ region_model %>% 
++ predict(newdata = Cen_Dat)
+
+> post_strat_region <- 
++ region_model %>% 
++ tidybayes::add_predicted_draws(newdata = Cen_Dat) %>% 
++ rename(DT_predict = .prediction) %>% 
++ mutate(DT_predict_prop = DT_predict*n) %>% 
++ group_by(region, .draw) %>% 
++ summarise(DT_predict = sum(DT_predict_prop)/sum(n)) %>% 
++ group_by(region) %>% 
++ summarise(mean = mean(DT_predict), lower=quantile(DT_predict, 0.025), upper=quantile(DT_predict, 0.975))
+
+MRPplot <- post_strat_region %>% 
++ ggplot(aes(y = mean, x=forcats::fct_inorder(region), color = "MRP estimate")) + geom_point() + geom_errorbar(aes(ymin=lower, ymax = upper), width = 0) + ylab("Preportion Donald Trump Support") + xlab("Region") + geom_point(data = TS %>% 
++ group_by(region, vote_trump) %>% 
++ summarise(n=n()) %>% 
++ group_by(region) %>% 
++ mutate(prop = n/sum(n)) %>% 
++ filter(vote_trump==1), aes(region, prop, color = "Raw Data")) + theme_minimal() + scale_color_brewer(palette = "Set1") + theme(legend.position = "bottom") + theme(legend.title = element_blank())
+
+MRPplot +scale_x_discrete(labels = abbreviate)
+
+density_plot<-region_model %>% 
+spread_draws(b_Intercept, r_region[region,]) %>% 
+mutate(region_mean = b_Intercept + r_region) %>% 
+ggplot(aes(y=region, x= region_mean)) + stat_halfeye()
+
+
+national_mean<-sum(post_strat_region$mean)/nrow(post_strat_region)
+
